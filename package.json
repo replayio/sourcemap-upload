@@ -12,8 +12,8 @@
   "files": [
     "lib"
   ],
-  "main": "./index.js",
-  "exports": "./index.js",
+  "main": "./lib/index.js",
+  "exports": "./lib/index.js",
   "types": "./lib/index.d.ts",
   "repository": {
     "type": "git",
