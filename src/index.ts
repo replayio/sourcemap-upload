@@ -15,10 +15,7 @@ const globPromisified = util.promisify(glob);
 
 const debug = makeDebug("recordreplay:sourcemap-upload");
 
-export enum MessageLevel {
-  Normal = 1,
-  Verbose = 2,
-}
+export type MessageLevel = "normal" | "verbose";
 export type LogCallback = (level: MessageLevel, message: string) => void;
 export interface UploadOptions {
   filepaths: Array<string> | string;
@@ -164,14 +161,11 @@ async function processSourceMaps(opts: NormalizedOptions) {
         generatedFile.absPath,
         map.absPath
       );
-      log(
-        MessageLevel.Verbose,
-        `Linked ${relativePath} to ${generatedFile.absPath}`
-      );
+      log("verbose", `Linked ${relativePath} to ${generatedFile.absPath}`);
     } else if (map.generatedFiles.size === 0) {
       debug("Failed to resolve generated source for %s", map.absPath);
       log(
-        MessageLevel.Verbose,
+        "verbose",
         `Skipped ${relativePath} because no generated files for it could be found`
       );
     } else {
@@ -181,7 +175,7 @@ async function processSourceMaps(opts: NormalizedOptions) {
         Array.from(map.generatedFiles, (genFile) => genFile.absPath)
       );
       log(
-        MessageLevel.Verbose,
+        "verbose",
         `Skipped ${relativePath} because multiple generated files were found for it`
       );
     }
@@ -190,7 +184,7 @@ async function processSourceMaps(opts: NormalizedOptions) {
   for (const mapToUpload of mapsToUpload) {
     const { relativePath, absPath } = mapToUpload;
     debug("Uploading %s", absPath);
-    log(MessageLevel.Normal, `Uploading ${relativePath}`);
+    log("normal", `Uploading ${relativePath}`);
 
     if (!dryRun) {
       await uploadSourcemapToAPI(groupName, apiKey, mapToUpload);
@@ -199,7 +193,7 @@ async function processSourceMaps(opts: NormalizedOptions) {
 
   debug("Done");
   log(
-    MessageLevel.Normal,
+    "normal",
     `Done! Uploaded ${mapsToUpload.length} sourcemaps${
       dryRun ? " (DRY RUN)" : ""
     }`
