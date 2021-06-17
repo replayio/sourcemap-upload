@@ -1,6 +1,8 @@
 /* Copyright 2020 Record Replay Inc. */
 
-import { pathToFileURL } from "url";
+// "URL" is available as a global, but Typescript doesn't have the types
+// for it. Importing it from the module does have types though.
+import { pathToFileURL, URL } from "url";
 import path from "path";
 import fs from "fs";
 import util from "util";
@@ -10,6 +12,7 @@ import assert from "assert";
 import fetch from "node-fetch";
 import makeDebug from "debug";
 import glob from "glob";
+import matchAll from "string.prototype.matchall";
 
 const globPromisified = util.promisify(glob);
 
@@ -337,7 +340,8 @@ async function findAndResolveMaps(
         assert(match);
         const [trailingComments] = match;
 
-        const matches = trailingComments.matchAll(
+        const matches = matchAll(
+          trailingComments,
           /\/\*(?:[@#] *sourceMappingURL=(.*)\s*|[\s\S]*?)\*\/|\/\/(?:[@#] *sourceMappingURL=(.*)|.*?)\r?\n|\r?\n/g
         );
 
