@@ -1,6 +1,6 @@
 {
   "name": "@recordreplay/sourcemap-upload",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "A utility library for uploading sourcemaps to Replay for use while replaying recordings.",
   "engines": {
     "node": ">=10.13"
