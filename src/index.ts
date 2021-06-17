@@ -342,7 +342,7 @@ async function findAndResolveMaps(
 
         const matches = matchAll(
           trailingComments,
-          /\/\*(?:[@#] *sourceMappingURL=(.*)\s*|[\s\S]*?)\*\/|\/\/(?:[@#] *sourceMappingURL=(.*)|.*?)\r?\n|\r?\n/g
+          /\/\*(?:[@#] *sourceMappingURL=(.*)\s*|[\s\S]*?)\*\/|\/\/(?:[@#] *sourceMappingURL=(.*)|.*?)(?:\r?\n|$)|\r?\n/g
         );
 
         debug("hashed filepath: %s", absPath);
