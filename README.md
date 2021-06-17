@@ -3,6 +3,28 @@
 Provides an NPM library allows uploading sourcemaps to Replay's servers so
 that they can be used when viewing recordings.
 
+## Usage
+
+This module will search the given filepaths for JS files and sourcemap files,
+and then it will use the `file` field of the sourcemap or the `//# sourceMappingURL=`
+comments in the JS to find pairs of sourcemap and JS file.
+
+## Debugging
+
+If no sourcemaps are being found, consider running the function with verbose
+mode enabled, or with `DEBUG=recordreplay:sourcemap-upload` set in the environment.
+
+Most likely, if sourcemaps are not being found, they either:
+
+- have no `file` property referencing their associated JS file
+- the generated file has `//# sourceMappingURL=`
+
+Either of these links is sufficient, so if changing the generated code to include a
+`//# sourceMappingURL=` comment is not what you want, including `file` is enough,
+and vice-versa.
+
+## API
+
 This module exports a named `uploadSourceMaps` function with the following options:
 
 ```typescript
