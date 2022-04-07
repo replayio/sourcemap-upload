@@ -9,7 +9,7 @@ import util from "util";
 import crypto from "crypto";
 import assert from "assert";
 
-import fetch from "node-fetch";
+import fetch, { Response } from "node-fetch";
 import makeDebug from "debug";
 import glob from "glob";
 import matchAll from "string.prototype.matchall";
@@ -203,27 +203,57 @@ async function processSourceMaps(opts: NormalizedOptions) {
   );
 }
 
+type PutOptions = {
+  groupName: string;
+  apiKey: string;
+  map: SourceMapToUpload;
+};
+
+async function sendUploadPUT(opts: PutOptions): Promise<Response> {
+  return fetch("https://api.replay.io/v1/sourcemap-upload", {
+    method: "PUT",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${opts.apiKey}`,
+      "X-Replay-SourceMap-Group": opts.groupName,
+      "X-Replay-SourceMap-Filename": opts.map.relativePath,
+      "X-Replay-SourceMap-ContentHash": `sha256:${opts.map.generatedFileHash}`,
+    },
+    body: opts.map.content,
+  });
+}
+
+async function sendUploadPUTWithRetries(opts: PutOptions): Promise<Response> {
+  for (let i = 0; i < 5; i++) {
+    try {
+      return await sendUploadPUT(opts);
+    } catch (err) {
+      debug(
+        "Sourcemap upload attempt %d failed for %s, got %O",
+        i,
+        opts.map.absPath,
+        err
+      );
+    }
+  }
+
+  return sendUploadPUT(opts);
+}
+
 async function uploadSourcemapToAPI(
   groupName: string,
   apiKey: string,
-  { absPath, relativePath, content, generatedFileHash }: SourceMapToUpload
+  map: SourceMapToUpload
 ) {
   let response;
   try {
-    response = await fetch("https://api.replay.io/v1/sourcemap-upload", {
-      method: "PUT",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${apiKey}`,
-        "X-Replay-SourceMap-Group": groupName,
-        "X-Replay-SourceMap-Filename": relativePath,
-        "X-Replay-SourceMap-ContentHash": `sha256:${generatedFileHash}`,
-      },
-      body: content,
-    });
-  } catch (err) {
-    debug("Failure uploading sourcemap %s, got %O", absPath, err);
-    throw new Error("Unexpected error uploading sourcemap");
+    response = await sendUploadPUTWithRetries({ groupName, apiKey, map });
+  } catch (
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    err: any
+  ) {
+    debug("Failure uploading sourcemap %s, got %O", map.absPath, err);
+    throw new Error(`Unexpected error uploading sourcemap: ${err}`);
   }
 
   let obj;
@@ -235,7 +265,7 @@ async function uploadSourcemapToAPI(
     } catch (err) {
       debug(
         "Failure parsing sourcemap upload response JSON for %s, got body %s",
-        absPath,
+        map.absPath,
         text.slice(0, 200) + (text.length > 200 ? "..." : "")
       );
       throw err;
@@ -247,14 +277,14 @@ async function uploadSourcemapToAPI(
   } catch (err) {
     debug(
       "Failure processing sourcemap upload response for %s, got %O",
-      absPath,
+      map.absPath,
       err
     );
     throw new Error("Unexpected error processing upload response");
   }
 
   if (response.status !== 200) {
-    debug("Failure uploading sourcemap for %s, got %O", absPath, obj);
+    debug("Failure uploading sourcemap for %s, got %O", map.absPath, obj);
     throw new Error(
       typeof obj.error === "string" ? obj.error : "Unknown upload error"
     );
