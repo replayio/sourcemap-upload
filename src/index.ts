@@ -3,11 +3,12 @@
 // "URL" is available as a global, but Typescript doesn't have the types
 // for it. Importing it from the module does have types though.
 import { pathToFileURL, URL } from "url";
-import path from "path";
-import fs from "fs";
-import util from "util";
-import crypto from "crypto";
+
 import assert from "assert";
+import crypto from "crypto";
+import fs from "fs";
+import path from "path";
+import util from "util";
 
 import fetch, { Response } from "node-fetch";
 import makeDebug from "debug";
@@ -223,31 +224,39 @@ async function sendUploadPUT(opts: PutOptions): Promise<Response> {
   });
 }
 
-async function sendUploadPUTWithRetries(opts: PutOptions): Promise<Response> {
-  for (let i = 0; i < 5; i++) {
-    try {
-      return await sendUploadPUT(opts);
-    } catch (err) {
-      debug(
-        "Sourcemap upload attempt %d failed for %s, got %O",
-        i,
-        opts.map.absPath,
-        err
-      );
-    }
-  }
+const maxUniformProbability = 0.99999;
+const baseRetryWindowMS = 100;
+function retrySleepTime(attempt: number): number {
+  // This is according to an Exponential distribution.
+  // The Exponential is the inverse Z transform of the Poisson,
+  // and the sum of Poisson distributions is itself a Poisson
+  // distribution. As a result, the expected load from any
+  // given iteration will be Poisson-distributed.
+  const roll = Math.min(Math.random(), maxUniformProbability);
+  const jitter = -Math.log(1 - roll);
 
-  return sendUploadPUT(opts);
+  // Quadratic backoff is fair and stable. Exponential backoff,
+  // linear backoff, and constant backoff are not. See:
+  //
+  // "Analysis of Backoff Protocols for Multiple Access Channels";
+  //   Johan Håstad, Tom Leighton, and Brian Rogoff;
+  //   https://www.csc.kth.se/~johanh/ethernetanalysis.pdf
+  //
+  // "Backoff Design for IEEE 802.11 DCF Networks: Fundamental Tradeoff
+  //  and Design Criterion";
+  //   Xinghua Sun and Lin Dai;
+  //   https://www.ee.cityu.edu.hk/~lindai/poly.pdf
+  return jitter * baseRetryWindowMS * (attempt + 1) ** 2;
 }
 
-async function uploadSourcemapToAPI(
+async function uploadSourcemapToAPIAsRetry(
   groupName: string,
   apiKey: string,
   map: SourceMapToUpload
 ) {
   let response;
   try {
-    response = await sendUploadPUTWithRetries({ groupName, apiKey, map });
+    response = await sendUploadPUT({ groupName, apiKey, map });
   } catch (
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     err: any
@@ -289,6 +298,30 @@ async function uploadSourcemapToAPI(
       typeof obj.error === "string" ? obj.error : "Unknown upload error"
     );
   }
+}
+
+async function uploadSourcemapToAPI(
+  groupName: string,
+  apiKey: string,
+  map: SourceMapToUpload
+) {
+  for (let i = 0; i < 5; i++) {
+    try {
+      return await uploadSourcemapToAPIAsRetry(groupName, apiKey, map);
+    } catch (err) {
+      debug(
+        "Sourcemap upload attempt %d failed for %s, got %O",
+        i,
+        map.absPath,
+        err
+      );
+    }
+    await new Promise<void>((resolve) =>
+      setTimeout(resolve, retrySleepTime(i))
+    );
+  }
+
+  return await uploadSourcemapToAPIAsRetry(groupName, apiKey, map);
 }
 
 async function findAndResolveMaps(
